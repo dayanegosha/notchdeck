@@ -33,7 +33,9 @@ jobs:
       - name: verify app
         run: |
           codesign --verify --strict --deep dist/NotchDeck.app
-          lipo -verify_arch arm64 x86_64 dist/NotchDeck.app/Contents/MacOS/NotchDeck
+          architectures="$(lipo -archs dist/NotchDeck.app/Contents/MacOS/NotchDeck)"
+          [[ " $architectures " == *" arm64 "* ]]
+          [[ " $architectures " == *" x86_64 "* ]]
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: NotchDeck-macOS
