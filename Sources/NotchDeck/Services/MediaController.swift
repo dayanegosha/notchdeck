@@ -98,7 +98,7 @@ final class MediaController: ObservableObject {
         guard !preview else { return }
         refresh()
         let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.poll()
             }
         }
