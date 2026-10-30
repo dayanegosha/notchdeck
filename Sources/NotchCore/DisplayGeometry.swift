@@ -5,14 +5,17 @@ public struct DisplaySnapshot: Equatable {
     public let id: UInt32
     public let frame: CGRect
     public let safeTop: CGFloat
+    public let menuBarHeight: CGFloat
     public let auxiliaryLeft: CGRect?
     public let auxiliaryRight: CGRect?
 
     public init(id: UInt32, frame: CGRect, safeTop: CGFloat,
-                auxiliaryLeft: CGRect? = nil, auxiliaryRight: CGRect? = nil) {
+                auxiliaryLeft: CGRect? = nil, auxiliaryRight: CGRect? = nil,
+                menuBarHeight: CGFloat = 24) {
         self.id = id
         self.frame = frame
         self.safeTop = safeTop
+        self.menuBarHeight = menuBarHeight
         self.auxiliaryLeft = auxiliaryLeft
         self.auxiliaryRight = auxiliaryRight
     }
@@ -41,7 +44,7 @@ public struct DisplayGeometry: Equatable {
         let compactWidth = max(1, min(frame.width - 24, (camera?.width ?? 112) + 64))
         let center = camera?.midX ?? frame.midX
         // Внешняя панель находится ниже меню; широкое окно не перекрывает его клики.
-        let compactTop = camera == nil ? frame.maxY - max(screen.safeTop, 24) - 6 : frame.maxY
+        let compactTop = camera == nil ? frame.maxY - max(screen.safeTop, screen.menuBarHeight) - 6 : frame.maxY
         let compact = CGRect(x: center - compactWidth / 2, y: compactTop - compactHeight,
                              width: compactWidth, height: compactHeight)
         let width = max(1, min(620, frame.width - 32))

@@ -207,7 +207,8 @@ final class PanelCoordinator: NSObject {
         let screens = NSScreen.screens.map { screen -> DisplaySnapshot in
             let id = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
             return DisplaySnapshot(id: id, frame: screen.frame, safeTop: screen.safeAreaInsets.top,
-                                   auxiliaryLeft: screen.auxiliaryTopLeftArea, auxiliaryRight: screen.auxiliaryTopRightArea)
+                                   auxiliaryLeft: screen.auxiliaryTopLeftArea, auxiliaryRight: screen.auxiliaryTopRightArea,
+                                   menuBarHeight: max(NSStatusBar.system.thickness, screen.frame.maxY - screen.visibleFrame.maxY))
         }
         model.displays = zip(NSScreen.screens, screens).map { screen, snapshot in
             DisplayChoice(id: snapshot.id, name: screen.localizedName, hasCamera: DisplayGeometry.resolve(snapshot).hasCamera)

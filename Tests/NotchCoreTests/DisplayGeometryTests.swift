@@ -54,4 +54,11 @@ final class DisplayGeometryTests: XCTestCase {
         XCTAssertEqual(geometry.expandedFrame.width, 568)
         XCTAssertTrue(screen.frame.contains(geometry.expandedFrame))
     }
+
+    func testExternalCapsuleRespectsLargerSystemMenuBar() {
+        let geometry = DisplayGeometry.resolve(DisplaySnapshot(id: 1,
+            frame: CGRect(x: 0, y: 0, width: 1920, height: 1080), safeTop: 0,
+            menuBarHeight: 40))
+        XCTAssertEqual(geometry.compactFrame.maxY, 1034)
+    }
 }
