@@ -164,7 +164,7 @@ private struct ClipboardPane: View {
     @Binding var focusRequested: Bool
     @State private var query = ""
     @State private var selectedID: UUID?
-    @FocusState private var searchFocused: Bool
+    @State private var searchEditing = false
 
     private var filtered: [ClipboardItem] {
         clipboard.items.filter { query.isEmpty || $0.searchText.localizedCaseInsensitiveContains(query) }
@@ -175,9 +175,10 @@ private struct ClipboardPane: View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(DeckStyle.secondary)
-                TextField("найти в истории", text: $query).textFieldStyle(.plain).font(.system(size: 12))
-                    .focused($searchFocused).onSubmit { if let selected { clipboard.copy(selected) } }
-                    .accessibilityLabel("Поиск в истории буфера")
+                NativeSearchField(text: $query, wantsFocus: $focusRequested,
+                                  onSubmit: { if let selected { clipboard.copy(selected) } },
+                                  onEditingChanged: { searchEditing = $0 })
+                    .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20)
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(DeckStyle.secondary) }
                         .buttonStyle(.plain).accessibilityLabel("Очистить поиск")
@@ -215,28 +216,15 @@ private struct ClipboardPane: View {
             }
             if let status = clipboard.status { DeckNotice(text: status) }
         }
-        .onChange(of: focusRequested) { _, requested in if requested { focusSearch() } }
         .onChange(of: query) { _, _ in if selected == nil { selectedID = filtered.first?.id } }
         .onChange(of: clipboard.items) { _, _ in if selected == nil { selectedID = filtered.first?.id } }
         .onAppear {
             if selectedID == nil { selectedID = filtered.first?.id }
-            if focusRequested { focusSearch() }
         }
         .onKeyPress(.return) {
-            guard !searchFocused, let selected else { return .ignored }
+            guard !searchEditing, let selected else { return .ignored }
             clipboard.copy(selected)
             return .handled
-        }
-    }
-
-    private func focusSearch() {
-        // Новая вкладка должна успеть присоединить поле к key window.
-        DispatchQueue.main.async {
-            guard focusRequested, model.selectedTab == .clipboard else { return }
-            searchFocused = true
-            DispatchQueue.main.async {
-                if searchFocused { focusRequested = false }
-            }
         }
     }
 
@@ -250,7 +238,11 @@ private struct ClipboardPane: View {
             Spacer(minLength: 0)
             if item.isPinned { Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(DeckStyle.mint) }
         }.padding(.vertical, 5).contentShape(Rectangle())
-            .onTapGesture(count: 2) { clipboard.copy(item) }
+            .onTapGesture { selectedID = item.id }
+            .simultaneousGesture(TapGesture(count: 2).onEnded {
+                selectedID = item.id
+                clipboard.copy(item)
+            })
             .accessibilityElement(children: .combine)
     }
 
