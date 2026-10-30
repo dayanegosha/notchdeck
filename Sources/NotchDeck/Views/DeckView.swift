@@ -238,10 +238,14 @@ private struct ClipboardPane: View {
             Spacer(minLength: 0)
             if item.isPinned { Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(DeckStyle.mint) }
         }.padding(.vertical, 5).contentShape(Rectangle())
-            .onTapGesture { selectedID = item.id }
+            .onTapGesture {
+                DispatchQueue.main.async { selectedID = item.id }
+            }
             .simultaneousGesture(TapGesture(count: 2).onEnded {
-                selectedID = item.id
-                clipboard.copy(item)
+                DispatchQueue.main.async {
+                    selectedID = item.id
+                    clipboard.copy(item)
+                }
             })
             .accessibilityElement(children: .combine)
     }

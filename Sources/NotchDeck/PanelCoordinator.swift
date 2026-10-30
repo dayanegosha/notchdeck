@@ -85,7 +85,8 @@ final class PanelCoordinator: NSObject {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self else { return event }
             let consumed = MainActor.assumeIsolated {
-                if event.type == .keyDown, event.window === self.expanded || event.window === self.previewWindow {
+                if event.type == .keyDown, let window = event.window,
+                   window === self.expanded || window === self.previewWindow {
                     if event.keyCode == 53 { self.close(); return true }
                     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
                     if flags.contains(.command), !flags.contains(.control), !flags.contains(.option) {
@@ -97,7 +98,8 @@ final class PanelCoordinator: NSObject {
                         }
                     }
                 }
-                if event.type != .keyDown, event.window !== self.expanded, event.window !== self.compact {
+                if event.type != .keyDown, event.window !== self.expanded, event.window !== self.compact,
+                   event.window !== self.previewWindow {
                     self.outsideClick()
                 }
                 return false
@@ -243,7 +245,7 @@ final class PanelCoordinator: NSObject {
     }
 
     private func outsideClick() {
-        guard model.expanded, !model.pinned else { return }
+        guard !model.isPreview, model.expanded, !model.pinned else { return }
         let pointer = NSEvent.mouseLocation
         if !expanded.frame.contains(pointer), !compact.frame.contains(pointer) { close() }
     }
