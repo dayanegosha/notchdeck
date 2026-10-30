@@ -25,16 +25,27 @@ final class FocusTimer: ObservableObject {
     func start(minutes: Int? = nil) {
         clock.start(seconds: Double(min(240, max(1, minutes ?? selectedMinutes))) * 60, at: Date())
         tick()
+        startTicker()
+    }
+
+    private func startTicker() {
         ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        ticker?.tolerance = 0.1
         RunLoop.main.add(ticker!, forMode: .common)
     }
 
     func pauseOrResume() {
-        if phase == .running { clock.pause(at: Date()) }
-        else if phase == .paused { clock.resume(at: Date()) }
+        if phase == .running {
+            clock.pause(at: Date())
+            ticker?.invalidate()
+            ticker = nil
+        } else if phase == .paused {
+            clock.resume(at: Date())
+            startTicker()
+        }
         tick()
     }
 
