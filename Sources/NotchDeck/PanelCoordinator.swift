@@ -43,6 +43,7 @@ final class PanelCoordinator: NSObject {
     }
 
     func start() {
+        installLocalMonitor()
         if model.isPreview { showPreview(); return }
         createStatusItem()
         updateScreens()
@@ -74,12 +75,27 @@ final class PanelCoordinator: NSObject {
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.outsideClick() }
         }
+        pointerTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.trackPointer() }
+        }
+        RunLoop.main.add(pointerTimer!, forMode: .common)
+    }
+
+    private func installLocalMonitor() {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self else { return event }
             let consumed = MainActor.assumeIsolated {
-                if event.type == .keyDown, event.keyCode == 53, event.window === self.expanded {
-                    self.close()
-                    return true
+                if event.type == .keyDown, event.window === self.expanded || event.window === self.previewWindow {
+                    if event.keyCode == 53 { self.close(); return true }
+                    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                    if flags.contains(.command), !flags.contains(.control), !flags.contains(.option) {
+                        let character = event.charactersIgnoringModifiers?.lowercased() ?? ""
+                        if character == "f" { self.open(tab: .clipboard, keyboard: true); return true }
+                        if let number = Int(character), (1...DeckTab.allCases.count).contains(number) {
+                            self.model.selectedTab = DeckTab.allCases[number - 1]
+                            return true
+                        }
+                    }
                 }
                 if event.type != .keyDown, event.window !== self.expanded, event.window !== self.compact {
                     self.outsideClick()
@@ -88,10 +104,6 @@ final class PanelCoordinator: NSObject {
             }
             return consumed ? nil : event
         }
-        pointerTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.trackPointer() }
-        }
-        RunLoop.main.add(pointerTimer!, forMode: .common)
     }
 
     func stop() {
@@ -144,7 +156,8 @@ final class PanelCoordinator: NSObject {
         model.expanded = false
         hoverStarted = nil
         outsideStarted = nil
-        if !model.isPreview { expanded.orderOut(nil) }
+        if model.isPreview { previewWindow?.orderOut(nil) }
+        else { expanded.orderOut(nil) }
     }
 
     func showSettings() {

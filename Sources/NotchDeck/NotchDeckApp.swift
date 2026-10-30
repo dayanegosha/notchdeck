@@ -1,11 +1,14 @@
 import AppKit
-import SwiftUI
 
 @main
-struct NotchDeckApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    var body: some Scene {
-        Settings { EmptyView() }
+enum NotchDeckApp {
+    @MainActor
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = AppDelegate()
+        application.delegate = delegate
+        application.setActivationPolicy(.accessory)
+        withExtendedLifetime(delegate) { application.run() }
     }
 }
 
@@ -29,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
+        createMainMenu()
         let controller = PanelCoordinator(model: DeckModel(preview: preview))
         coordinator = controller
         controller.start()
@@ -40,4 +44,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    @objc private func openSettings() { coordinator?.showSettings() }
+
+    private func createMainMenu() {
+        let main = NSMenu()
+        let applicationItem = NSMenuItem()
+        let applicationMenu = NSMenu(title: "NotchDeck")
+        let settings = NSMenuItem(title: "Настройки…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        applicationMenu.addItem(settings)
+        applicationMenu.addItem(.separator())
+        applicationMenu.addItem(NSMenuItem(title: "Завершить NotchDeck",
+            action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        applicationItem.submenu = applicationMenu
+        main.addItem(applicationItem)
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Правка")
+        for (title, action, key) in [("Отменить", "undo:", "z"), ("Вырезать", "cut:", "x"),
+                                     ("Копировать", "copy:", "c"), ("Вставить", "paste:", "v"),
+                                     ("Выбрать всё", "selectAll:", "a")] {
+            edit.addItem(NSMenuItem(title: title, action: NSSelectorFromString(action), keyEquivalent: key))
+        }
+        editItem.submenu = edit
+        main.addItem(editItem)
+        NSApp.mainMenu = main
+    }
 }
