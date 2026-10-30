@@ -29,4 +29,29 @@ final class DisplayGeometryTests: XCTestCase {
         XCTAssertEqual(DisplayGeometry.select(from: [external, laptop], preferredID: 1)?.id, 1)
         XCTAssertNil(DisplayGeometry.select(from: [], preferredID: nil))
     }
+
+    func testExternalDisplayUsesCapsuleBelowMenuAndKeepsBodyOnScreen() {
+        let screen = DisplaySnapshot(id: 7, frame: CGRect(x: -2560, y: -400, width: 2560, height: 1440), safeTop: 0)
+        let geometry = DisplayGeometry.resolve(screen)
+        XCTAssertFalse(geometry.hasCamera)
+        XCTAssertEqual(geometry.compactFrame.midX, -1280)
+        XCTAssertEqual(geometry.compactFrame.maxY, screen.frame.maxY - 30)
+        XCTAssertTrue(screen.frame.contains(geometry.expandedFrame))
+        XCTAssertEqual(geometry.expandedFrame.maxY, geometry.compactFrame.minY)
+    }
+
+    func testOverlappingAuxiliaryAreasAreNotACamera() {
+        let geometry = DisplayGeometry.resolve(DisplaySnapshot(id: 1,
+            frame: CGRect(x: 0, y: 0, width: 1440, height: 900), safeTop: 32,
+            auxiliaryLeft: CGRect(x: 0, y: 868, width: 800, height: 32),
+            auxiliaryRight: CGRect(x: 700, y: 868, width: 740, height: 32)))
+        XCTAssertFalse(geometry.hasCamera)
+    }
+
+    func testExpandedWidthFitsSmallerScaledDisplay() {
+        let screen = DisplaySnapshot(id: 1, frame: CGRect(x: 2400, y: 800, width: 600, height: 700), safeTop: 0)
+        let geometry = DisplayGeometry.resolve(screen)
+        XCTAssertEqual(geometry.expandedFrame.width, 568)
+        XCTAssertTrue(screen.frame.contains(geometry.expandedFrame))
+    }
 }

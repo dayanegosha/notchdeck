@@ -38,7 +38,7 @@ public struct DisplayGeometry: Equatable {
                             width: right.minX - left.maxX, height: screen.safeTop)
         }
         let compactHeight = camera?.height ?? 28
-        let compactWidth = min(frame.width - 24, (camera?.width ?? 112) + 64)
+        let compactWidth = max(1, min(frame.width - 24, (camera?.width ?? 112) + 64))
         let center = camera?.midX ?? frame.midX
         // Внешняя панель находится ниже меню; широкое окно не перекрывает его клики.
         let compactTop = camera == nil ? frame.maxY - max(screen.safeTop, 24) - 6 : frame.maxY
