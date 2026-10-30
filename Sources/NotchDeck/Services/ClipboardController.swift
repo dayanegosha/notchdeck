@@ -6,6 +6,14 @@ import LocalAuthentication
 import NotchCore
 import Security
 
+protocol ClipboardStorage: AnyObject {
+    func load(completion: @escaping @Sendable (Result<[ClipboardItem], Error>) -> Void)
+    func save(_ items: [ClipboardItem], immediate: Bool, removePrevious: Bool,
+              completion: @escaping @Sendable (Bool) -> Void)
+    func erase(completion: @escaping @Sendable (Bool) -> Void)
+    func flush()
+}
+
 @MainActor
 final class ClipboardController: ObservableObject {
     @Published var enabled: Bool {
@@ -44,7 +52,6 @@ final class ClipboardController: ObservableObject {
             items = history.items
             if !isPreview {
                 defaults?.set(limit, forKey: "clipboard.maxItems")
-                loadToken = nil
                 saveHistory(immediate: true)
             }
         }
@@ -53,7 +60,6 @@ final class ClipboardController: ObservableObject {
         didSet {
             guard !isPreview, oldValue != excludedBundleIDs else { return }
             defaults?.set(excludedBundleIDs, forKey: "clipboard.excludedBundleIDs")
-            loadToken = nil
             history = ClipboardHistory(items: history.items.filter {
                 ClipboardCapturePolicy.shouldCapture(types: [], sourceBundleID: $0.sourceBundleID,
                                                      exclusions: excludedBundleIDs)
@@ -67,7 +73,9 @@ final class ClipboardController: ObservableObject {
 
     private let isPreview: Bool
     private let defaults: UserDefaults?
-    private let storage = EncryptedClipboardStore()
+    private let storage: any ClipboardStorage
+    private let suppliedPasteboard: NSPasteboard?
+    private var pasteboard: NSPasteboard { suppliedPasteboard ?? .general }
     private var history: ClipboardHistory
     private var timer: Timer?
     private var lastChangeCount: Int?
@@ -76,16 +84,20 @@ final class ClipboardController: ObservableObject {
     private var persistenceVersion = 0
     private var persistenceReady = true
 
-    init(preview: Bool = false) {
+    init(preview: Bool = false, storage: (any ClipboardStorage)? = nil,
+         defaults: UserDefaults? = nil, pasteboard: NSPasteboard? = nil) {
         isPreview = preview
-        defaults = preview ? nil : .standard
-        enabled = preview ? false : defaults?.bool(forKey: "clipboard.enabled") ?? false
-        persistsHistory = preview ? false : defaults?.bool(forKey: "clipboard.persistsHistory") ?? false
-        let savedLimit = preview ? 500 : defaults?.integer(forKey: "clipboard.maxItems") ?? 0
+        self.storage = storage ?? EncryptedClipboardStore()
+        suppliedPasteboard = pasteboard
+        let preferences = preview ? nil : defaults ?? .standard
+        self.defaults = preferences
+        enabled = preview ? false : preferences?.bool(forKey: "clipboard.enabled") ?? false
+        persistsHistory = preview ? false : preferences?.bool(forKey: "clipboard.persistsHistory") ?? false
+        let savedLimit = preview ? 500 : preferences?.integer(forKey: "clipboard.maxItems") ?? 0
         let limit = savedLimit > 0 ? min(5000, savedLimit) : 500
         maxItems = limit
         excludedBundleIDs = preview ? ClipboardCapturePolicy.defaultExcludedBundleIDs
-            : defaults?.string(forKey: "clipboard.excludedBundleIDs") ?? ClipboardCapturePolicy.defaultExcludedBundleIDs
+            : preferences?.string(forKey: "clipboard.excludedBundleIDs") ?? ClipboardCapturePolicy.defaultExcludedBundleIDs
         let examples = preview ? Self.previewItems() : []
         let initialHistory = ClipboardHistory(items: examples, maxItems: limit)
         history = initialHistory
@@ -96,7 +108,7 @@ final class ClipboardController: ObservableObject {
     func start() {
         guard !isPreview, enabled, timer == nil else { return }
         // Старый буфер не читается: согласие действует только на последующие копирования.
-        lastChangeCount = NSPasteboard.general.changeCount
+        lastChangeCount = pasteboard.changeCount
         if persistsHistory && !hasLoadedHistory { restoreHistory() }
         let timer = Timer(timeInterval: 0.6, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.poll() }
@@ -140,7 +152,7 @@ final class ClipboardController: ObservableObject {
             }
             objects = item.filePaths.map { NSURL(fileURLWithPath: $0) }
         }
-        let pasteboard = NSPasteboard.general
+        let pasteboard = self.pasteboard
         pasteboard.clearContents()
         let success = pasteboard.writeObjects(objects)
         lastChangeCount = pasteboard.changeCount
@@ -148,20 +160,21 @@ final class ClipboardController: ObservableObject {
     }
 
     func togglePin(_ item: ClipboardItem) {
-        loadToken = nil
+        guard canEditRestoredHistory() else { return }
         history.togglePin(id: item.id)
         items = history.items
         saveHistory()
     }
 
     func remove(_ item: ClipboardItem) {
-        loadToken = nil
+        guard canEditRestoredHistory() else { return }
         history.remove(id: item.id)
         items = history.items
         saveHistory(immediate: true)
     }
 
     func clear(includePinned: Bool = false) {
+        guard includePinned || canEditRestoredHistory() else { return }
         loadToken = nil
         hasLoadedHistory = true
         persistenceReady = true
@@ -179,7 +192,7 @@ final class ClipboardController: ObservableObject {
 
     private func poll() {
         guard enabled, timer != nil, !isPreview else { return }
-        let pasteboard = NSPasteboard.general
+        let pasteboard = self.pasteboard
         let change = pasteboard.changeCount
         guard change != lastChangeCount else { return }
         lastChangeCount = change
@@ -235,6 +248,7 @@ final class ClipboardController: ObservableObject {
                     }
                     self.history = ClipboardHistory(items: self.items + allowed, maxItems: self.maxItems)
                     self.items = self.history.items
+                    if self.status == "история ещё загружается" { self.status = nil }
                     self.saveHistory(immediate: true)
                 case .failure:
                     self.persistenceReady = false
@@ -247,8 +261,16 @@ final class ClipboardController: ObservableObject {
     private func saveHistory(immediate: Bool = false) {
         guard !isPreview, enabled, persistsHistory, persistenceReady, loadToken == nil else { return }
         persistenceVersion += 1
-        storage.save(items, immediate: immediate,
+        storage.save(items, immediate: immediate, removePrevious: false,
                      completion: storageCompletion(version: persistenceVersion))
+    }
+
+    private func canEditRestoredHistory() -> Bool {
+        guard loadToken == nil else {
+            status = "история ещё загружается"
+            return false
+        }
+        return true
     }
 
     private func storageCompletion(version: Int) -> @Sendable (Bool) -> Void {
@@ -292,7 +314,7 @@ private struct ClipboardArchive: Codable {
 
 private enum ClipboardStorageError: Error { case unavailable, invalidArchive }
 
-private final class EncryptedClipboardStore: @unchecked Sendable {
+private final class EncryptedClipboardStore: ClipboardStorage, @unchecked Sendable {
     private let queue = DispatchQueue(label: "NotchDeck.clipboard.storage", qos: .utility)
     private var generation = 0
     private var pending: DispatchWorkItem?

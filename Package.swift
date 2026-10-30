@@ -8,6 +8,7 @@ let package = Package(
     targets: [
         .target(name: "NotchCore"),
         .executableTarget(name: "NotchDeck", dependencies: ["NotchCore"]),
-        .testTarget(name: "NotchCoreTests", dependencies: ["NotchCore"])
+        .testTarget(name: "NotchCoreTests", dependencies: ["NotchCore"]),
+        .testTarget(name: "NotchDeckTests", dependencies: ["NotchDeck", "NotchCore"])
     ]
 )
