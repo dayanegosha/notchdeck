@@ -89,7 +89,7 @@ private struct MusicPane: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Label(media.sourceName, systemImage: "dot.radiowaves.left.and.right")
                         .font(.system(size: 10, weight: .medium)).foregroundStyle(DeckStyle.secondary)
@@ -107,7 +107,7 @@ private struct MusicPane: View {
                         } else {
                             Image(systemName: "waveform").font(.system(size: 36, weight: .light)).foregroundStyle(DeckStyle.mint)
                         }
-                    }.frame(width: 108, height: 108)
+                    }.frame(width: 100, height: 100)
                         .overlay(RoundedRectangle(cornerRadius: 17).stroke(DeckStyle.line, lineWidth: 1))
                     VStack(alignment: .leading, spacing: 7) {
                         Text(media.title.isEmpty ? "ничего не играет" : media.title)
@@ -142,7 +142,7 @@ private struct MusicPane: View {
                     }
                 }
                 if let status = media.status { DeckNotice(text: status) }
-            }.padding(17)
+            }.padding(15)
         }.modifier(DeckSurface())
     }
 
@@ -229,7 +229,16 @@ private struct ClipboardPane: View {
         }
     }
 
-    private func focusSearch() { searchFocused = true; focusRequested = false }
+    private func focusSearch() {
+        // Новая вкладка должна успеть присоединить поле к key window.
+        DispatchQueue.main.async {
+            guard focusRequested, model.selectedTab == .clipboard else { return }
+            searchFocused = true
+            DispatchQueue.main.async {
+                if searchFocused { focusRequested = false }
+            }
+        }
+    }
 
     private func clipboardRow(_ item: ClipboardItem) -> some View {
         HStack(alignment: .top, spacing: 8) {
